@@ -1,6 +1,11 @@
 import { TriageCase, QueueStats, PriorityCategory, ReviewerStatus, PrivacyMetrics, FieldJustifications } from "@/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8088";
+const rawUrl =
+  process.env.NEXT_PUBLIC_API_URL ||
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  "http://127.0.0.1:8088";
+
+export const API_BASE = rawUrl.replace(/\/+$/, "");
 
 export async function fetchQueue(filters?: {
   priority?: string;
@@ -154,3 +159,12 @@ export async function getPresetAudioTranscripts(): Promise<{ id: string; label: 
   if (!res.ok) throw new Error("Failed to fetch transcription presets");
   return res.json();
 }
+
+export async function purgeAllEphemeral(): Promise<{ status: string; message: string }> {
+  const res = await fetch(`${API_BASE}/privacy/purge-all-ephemeral`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error("Failed to purge all ephemeral records");
+  return res.json();
+}
+

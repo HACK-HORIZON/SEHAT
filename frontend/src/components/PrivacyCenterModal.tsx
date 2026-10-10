@@ -10,7 +10,7 @@ import {
   CheckCircle,
   AlertTriangle
 } from "lucide-react";
-import { fetchPrivacyMetrics, fetchFieldJustifications } from "@/services/api";
+import { fetchPrivacyMetrics, fetchFieldJustifications, purgeAllEphemeral } from "@/services/api";
 import { FieldJustifications, FieldJustification } from "@/types";
 
 interface PrivacyModalProps {
@@ -41,14 +41,10 @@ export default function PrivacyCenterModal({
     if (confirm("क्या आप सभी अस्थाई टोकन और मरीज डेटा तुरंत नष्ट करना चाहते हैं?")) {
       setIsPurging(true);
       try {
-        const res = await fetch("http://127.0.0.1:8088/privacy/purge-all-ephemeral", {
-          method: "POST",
-        });
-        if (res.ok) {
-          alert("सभी अस्थाई रिकॉर्ड सुरक्षित रूप से हटा दिए गए हैं।");
-          onQueuePurged();
-          onClose();
-        }
+        await purgeAllEphemeral();
+        alert("सभी अस्थाई रिकॉर्ड सुरक्षित रूप से हटा दिए गए हैं।");
+        onQueuePurged();
+        onClose();
       } catch {
         alert("डेटा हटाने में त्रुटि हुई।");
       } finally {

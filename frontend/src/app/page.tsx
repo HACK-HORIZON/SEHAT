@@ -274,6 +274,7 @@ export default function Home() {
         onCaseCreated={handleCaseCreated}
         facilityName={selectedFacility}
         lowBandwidthDefault={lowBandwidth}
+        initialLanguage={uiLang}
       />
 
       {/* Privacy Center Modal */}

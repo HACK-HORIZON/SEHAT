@@ -76,3 +76,9 @@ def root():
         "supported_languages": ["en", "hi", "or", "bn", "ta"]
     }
 
+@app.get("/health")
+@app.get("/ping")
+def ping():
+    return {"status": "ok", "message": "SEHAT Backend is awake"}
+
+

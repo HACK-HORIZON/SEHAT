@@ -1,11 +1,25 @@
 import { TriageCase, QueueStats, PriorityCategory, ReviewerStatus, PrivacyMetrics, FieldJustifications } from "@/types";
 
-const rawUrl =
-  process.env.NEXT_PUBLIC_API_URL ||
-  process.env.NEXT_PUBLIC_API_BASE_URL ||
-  "http://127.0.0.1:8088";
+const PROD_RENDER_URL = "https://sehat-sywu.onrender.com";
 
-export const API_BASE = rawUrl.replace(/\/+$/, "");
+const getBaseUrl = (): string => {
+  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) return process.env.NEXT_PUBLIC_API_BASE_URL;
+
+  if (typeof window !== "undefined") {
+    if (
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1"
+    ) {
+      return "http://127.0.0.1:8088";
+    }
+    return PROD_RENDER_URL;
+  }
+
+  return process.env.NODE_ENV === "production" ? PROD_RENDER_URL : "http://127.0.0.1:8088";
+};
+
+export const API_BASE = getBaseUrl().replace(/\/+$/, "");
 
 export async function fetchQueue(filters?: {
   priority?: string;

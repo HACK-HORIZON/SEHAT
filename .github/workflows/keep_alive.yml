@@ -12,10 +12,6 @@ jobs:
     steps:
       - name: Ping Render Health Endpoint
         run: |
-          RENDER_URL="${{ secrets.RENDER_BACKEND_URL }}"
-          if [ -z "$RENDER_URL" ]; then
-            echo "RENDER_BACKEND_URL secret is not set yet. Defaulting ping test."
-          else
-            echo "Pinging $RENDER_URL/ping"
-            curl -s "$RENDER_URL/ping" || true
-          fi
+          RENDER_URL="${{ secrets.RENDER_BACKEND_URL || 'https://sehat-sywu.onrender.com' }}"
+          echo "Pinging $RENDER_URL/ping"
+          curl -s "$RENDER_URL/ping" || true

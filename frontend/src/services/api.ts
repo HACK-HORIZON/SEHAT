@@ -1,10 +1,21 @@
-import { TriageCase, QueueStats, PriorityCategory, ReviewerStatus, PrivacyMetrics, FieldJustifications } from "@/types";
+import {
+  TriageCase,
+  QueueStats,
+  PriorityCategory,
+  ReviewerStatus,
+  PrivacyMetrics,
+  FieldJustifications,
+} from "@/types";
 
 const PROD_RENDER_URL = "https://sehat-sywu.onrender.com";
 
-const getBaseUrl = (): string => {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  if (process.env.NEXT_PUBLIC_API_BASE_URL) return process.env.NEXT_PUBLIC_API_BASE_URL;
+export function getApiBase(): string {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, "");
+  }
+  if (process.env.NEXT_PUBLIC_API_BASE_URL) {
+    return process.env.NEXT_PUBLIC_API_BASE_URL.replace(/\/+$/, "");
+  }
 
   if (typeof window !== "undefined") {
     if (
@@ -13,13 +24,44 @@ const getBaseUrl = (): string => {
     ) {
       return "http://127.0.0.1:8088";
     }
-    return PROD_RENDER_URL;
+    // In production on Vercel or any public domain, use the same-origin Next.js proxy
+    return "/api/proxy";
   }
 
-  return process.env.NODE_ENV === "production" ? PROD_RENDER_URL : "http://127.0.0.1:8088";
-};
+  return process.env.NODE_ENV === "production"
+    ? PROD_RENDER_URL
+    : "http://127.0.0.1:8088";
+}
 
-export const API_BASE = getBaseUrl().replace(/\/+$/, "");
+export const API_BASE = getApiBase();
+
+/**
+ * Robust universal fetch:
+ * 1. Calls same-origin Next.js rewrite (/api/proxy/...) to prevent CORS/adblocker/mixed-network issues.
+ * 2. If proxy is unavailable, falls back directly to Render production backend.
+ */
+async function safeFetch(path: string, options?: RequestInit): Promise<Response> {
+  const base = getApiBase();
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  const url = `${base}${cleanPath}`;
+
+  try {
+    const res = await fetch(url, options);
+    return res;
+  } catch (err) {
+    if (
+      typeof window !== "undefined" &&
+      !base.includes("127.0.0.1") &&
+      !base.includes("localhost") &&
+      base !== PROD_RENDER_URL
+    ) {
+      console.warn("[SEHAT] Proxy request failed, falling back directly to Render backend...", err);
+      const directUrl = `${PROD_RENDER_URL}${cleanPath}`;
+      return await fetch(directUrl, options);
+    }
+    throw err;
+  }
+}
 
 export async function fetchQueue(filters?: {
   priority?: string;
@@ -33,7 +75,8 @@ export async function fetchQueue(filters?: {
   if (filters?.facility) params.append("facility", filters.facility);
   if (filters?.search) params.append("search", filters.search);
 
-  const res = await fetch(`${API_BASE}/triage/queue?${params.toString()}`, {
+  const query = params.toString() ? `?${params.toString()}` : "";
+  const res = await safeFetch(`/triage/queue${query}`, {
     cache: "no-store",
   });
   if (!res.ok) throw new Error("Failed to fetch queue");
@@ -41,13 +84,13 @@ export async function fetchQueue(filters?: {
 }
 
 export async function fetchQueueStats(): Promise<QueueStats> {
-  const res = await fetch(`${API_BASE}/triage/stats`, { cache: "no-store" });
+  const res = await safeFetch("/triage/stats", { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch queue stats");
   return res.json();
 }
 
 export async function fetchCase(caseId: string): Promise<TriageCase> {
-  const res = await fetch(`${API_BASE}/triage/case/${caseId}`, { cache: "no-store" });
+  const res = await safeFetch(`/triage/case/${caseId}`, { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch case");
   return res.json();
 }
@@ -67,7 +110,7 @@ export async function submitIntake(data: {
   image_observation_cue?: string;
   low_bandwidth_mode: boolean;
 }): Promise<TriageCase> {
-  const res = await fetch(`${API_BASE}/intake/submit`, {
+  const res = await safeFetch("/intake/submit", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -88,7 +131,7 @@ export async function overridePriority(
     reviewer_role?: string;
   }
 ): Promise<TriageCase> {
-  const res = await fetch(`${API_BASE}/review/${caseId}/override`, {
+  const res = await safeFetch(`/review/${caseId}/override`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -111,7 +154,7 @@ export async function updateReviewStatus(
     escalate_to?: string;
   }
 ): Promise<TriageCase> {
-  const res = await fetch(`${API_BASE}/review/${caseId}/status`, {
+  const res = await safeFetch(`/review/${caseId}/status`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -125,15 +168,20 @@ export async function escalateCase(
   target: string = "Senior Medical Officer - Emergency Resuscitation",
   reviewer_name: string = "Dr. S. K. Mohapatra"
 ): Promise<TriageCase> {
-  const res = await fetch(`${API_BASE}/review/${caseId}/escalate?target=${encodeURIComponent(target)}&reviewer_name=${encodeURIComponent(reviewer_name)}`, {
-    method: "POST",
-  });
+  const res = await safeFetch(
+    `/review/${caseId}/escalate?target=${encodeURIComponent(
+      target
+    )}&reviewer_name=${encodeURIComponent(reviewer_name)}`,
+    {
+      method: "POST",
+    }
+  );
   if (!res.ok) throw new Error("Failed to escalate case");
   return res.json();
 }
 
 export async function requestMoreInfo(caseId: string): Promise<TriageCase> {
-  const res = await fetch(`${API_BASE}/review/${caseId}/request-more-info`, {
+  const res = await safeFetch(`/review/${caseId}/request-more-info`, {
     method: "POST",
   });
   if (!res.ok) throw new Error("Failed to request more info");
@@ -141,19 +189,19 @@ export async function requestMoreInfo(caseId: string): Promise<TriageCase> {
 }
 
 export async function fetchPrivacyMetrics(): Promise<PrivacyMetrics> {
-  const res = await fetch(`${API_BASE}/privacy/metrics`, { cache: "no-store" });
+  const res = await safeFetch("/privacy/metrics", { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch privacy metrics");
   return res.json();
 }
 
 export async function fetchFieldJustifications(): Promise<FieldJustifications> {
-  const res = await fetch(`${API_BASE}/privacy/justifications`, { cache: "no-store" });
+  const res = await safeFetch("/privacy/justifications", { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch justifications");
   return res.json();
 }
 
 export async function purgeSession(caseId: string): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE}/privacy/purge-session/${caseId}`, {
+  const res = await safeFetch(`/privacy/purge-session/${caseId}`, {
     method: "DELETE",
   });
   if (!res.ok) throw new Error("Failed to purge session");
@@ -161,24 +209,25 @@ export async function purgeSession(caseId: string): Promise<{ success: boolean }
 }
 
 export async function resetDemoDataset(): Promise<{ success: boolean }> {
-  const res = await fetch(`${API_BASE}/triage/reset-demo`, {
+  const res = await safeFetch("/triage/reset-demo", {
     method: "POST",
   });
   if (!res.ok) throw new Error("Failed to reset demo dataset");
   return res.json();
 }
 
-export async function getPresetAudioTranscripts(): Promise<{ id: string; label: string; transcript: string }[]> {
-  const res = await fetch(`${API_BASE}/transcription/presets`, { cache: "no-store" });
+export async function getPresetAudioTranscripts(): Promise<
+  { id: string; label: string; transcript: string }[]
+> {
+  const res = await safeFetch("/transcription/presets", { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch transcription presets");
   return res.json();
 }
 
 export async function purgeAllEphemeral(): Promise<{ status: string; message: string }> {
-  const res = await fetch(`${API_BASE}/privacy/purge-all-ephemeral`, {
+  const res = await safeFetch("/privacy/purge-all-ephemeral", {
     method: "POST",
   });
   if (!res.ok) throw new Error("Failed to purge all ephemeral records");
   return res.json();
 }
-
